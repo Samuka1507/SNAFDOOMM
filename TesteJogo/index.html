@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FNAF: Doom 3D - Lanterna no Botão Direito</title>
+    <style>
+        :root {
+            --bg: #000;
+            --text: #ccc;
+            --danger: #8b0000;
+            --accent: #ff6600;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            flex-direction: column;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            outline: none;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 20;
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #ff0000;
+            text-shadow: 0 0 30px #ff0000, 0 0 60px #8b0000;
+            letter-spacing: 4px;
+            text-align: center;
+            display: none;
+            animation: flicker 0.15s infinite alternate;
+        }
+
+        @keyframes flicker {
+            0% {
+                opacity: 0.7;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        #hud {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 30px;
+            color: #ccc;
+            font-size: 0.9em;
+            letter-spacing: 2px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 25px;
+            border-radius: 25px;
+            border: 1px solid #333;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #hud span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #hud .label {
+            color: #888;
+            font-size: 0.8em;
+        }
+
+        #hud .value {
+            color: #ff6600;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+
+        #hud .danger {
+            color: #ff0000;
+            animation: blink 0.5s infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        #energy-bar {
+            width: 120px;
+            height: 10px;
+            background: #1a1a1a;
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid #444;
+        }
+
+        #energy-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff0000, #ff6600, #ffcc00);
+            transition: width 0.3s;
+            border-radius: 5px;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #555;
+            font-size: 0.7em;
+            letter-spacing: 1px;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        #crosshair::before {
+            width: 2px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #crosshair::after {
+            height: 2px;
+            width: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        #vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 12;
+            background: radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="game-container">
+        <div id="vignette"></div>
+        <div id="overlay"></div>
+        <div id="hud">
+            <span><span class="label">⏰ HORA:</span><span class="value" id="time-display">00:00</span></span>
+            <span><span class="label">⚡ ENERGIA:</span>
+                <div id="energy-bar">
+                    <div id="energy-fill" style="width:100%"></div>
+                </div>
+            </span>
+            <span><span class="label">🟢 SOBREVIVENTES:</span><span class="value" id="survivors-count">4</span></span>
+            <span><span class="label">👹 ANIMATRÔNICOS:</span><span class="value" id="anima-count">4</span></span>
+        </div>
+        <div id="instructions">
+            🎮 <b>WASD</b> - Mover &nbsp;|&nbsp; 🖱️ <b>MOUSE</b> - Olhar &nbsp;|&nbsp; 🖱️ <b>BOTÃO DIREITO</b> -
+            Lanterna &nbsp;|&nbsp; 🔒 <b>E</b> - Trancar porta &nbsp;|&nbsp; <b>R</b> - Reiniciar &nbsp;|&nbsp;
+            <b>ESC</b> - Soltar mouse
+        </div>
+        <div id="crosshair"></div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ========== CONFIGURAÇÃO INICIAL ==========
+        const container = document.getElementById('game-container');
+        const overlay = document.getElementById('overlay');
+        const timeDisplay = document.getElementById('time-display');
+        const energyFill = document.getElementById('energy-fill');
+        const survivorsCountEl = document.getElementById('survivors-count');
+        const animaCountEl = document.getElementById('anima-count');
+
+        const WIDTH = window.innerWidth;
+        const HEIGHT = window.innerHeight;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020208);
+        scene.fog = new THREE.FogExp2(0x020208, 0.025);
+
+        const camera = new THREE.PerspectiveCamera(70, WIDTH / HEIGHT, 0.3, 100);
+        camera.position.set(3, 1.6, 3);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(WIDTH, HEIGHT);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0x112244, 0.15);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0x223344, 0.05);
+        dirLight.position.set(10, 20, 10);
+        scene.add(dirLight);
+
+        // ========== CONSTANTES DO MAPA (estilo FNAF Doom 2) ==========
+        const TILE_SIZE = 2;
+        const COLS = 20;
+        const ROWS = 15;
+        const MAP_TEMPLATE = [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        ];
+
+        // ========== CRIAÇÃO DO LABIRINTO ==========
+        const wallGroup = new THREE.Group();
+        const doorMeshes = [];
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.8, metalness: 0.2 });
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x0a0a15, roughness: 0.9 });
+        const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a3a, roughness: 0.6, metalness: 0.3 });
+        const doorLockedMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.4, metalness: 0.5, emissive: new THREE.Color(0x200000) });
+
+        function createMap() {
+            while (wallGroup.children.length > 0) wallGroup.remove(wallGroup.children[0]);
+            doorMeshes.length = 0;
+
+            const floorGeo = new THREE.PlaneGeometry(COLS * TILE_SIZE, ROWS * TILE_SIZE);
+            const floorMesh = new THREE.Mesh(floorGeo, floorMaterial);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.position.set(COLS * TILE_SIZE / 2, 0, ROWS * TILE_SIZE / 2);
+            floorMesh.receiveShadow = true;
+            wallGroup.add(floorMesh);
+
+            const wallGeo = new THREE.BoxGeometry(TILE_SIZE, 3, TILE_SIZE);
+            const doorGeo = new THREE.BoxGeometry(TILE_SIZE * 0.8, 3, TILE_SIZE * 0.8);
+
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const tile = MAP_TEMPLATE[row][col];
+                    const x = col * TILE_SIZE + TILE_SIZE / 2;
+                    const z = row * TILE_SIZE + TILE_SIZE / 2;
+
+                    if (tile === 1) {
+                        const wall = new THREE.Mesh(wallGeo, wallMaterial);
+                        wall.position.set(x, 1.5, z);
+                        wall.castShadow = true;
+                        wall.receiveShadow = true;
+                        wallGroup.add(wall);
+                    } else if (tile === 2) {
+                        const doorMesh = new THREE.Mesh(doorGeo, doorMaterial);
+                        doorMesh.position.set(x, 1.5, z);
+                        doorMesh.castShadow = true;
+                        doorMesh.receiveShadow = true;
+                        wallGroup.add(doorMesh);
+                        doorMeshes.push({ mesh: doorMesh, col, row, locked: false });
+                    }
+                }
+            }
+            scene.add(wallGroup);
+        }
+
+        function updateDoorVisuals() {
+            for (const d of doorMeshes) {
+                d.mesh.material = d.locked ? doorLockedMaterial : doorMaterial;
+            }
+        }
+
+        // ========== ENTIDADES 3D ==========
+        const entityMeshes = [];
+        class Entity3D {
+            constructor(x, z, color, size = 0.7, shape = 'cylinder') {
+                this.x = x;
+                this.z = z;
+                this.size = size;
+                this.alive = true;
+                this.vx = 0;
+                this.vz = 0;
+                this.speed = 2;
+
+                const group = new THREE.Group();
+                let bodyGeo;
+                if (shape === 'player') bodyGeo = new THREE.CylinderGeometry(size * 0.6, size * 0.8, size * 1.5, 8);
+                else if (shape === 'anima') bodyGeo = new THREE.BoxGeometry(size * 1.2, size * 1.4, size * 1.2);
+                else bodyGeo = new THREE.CylinderGeometry(size * 0.5, size * 0.7, size * 1.2, 8);
+
+                const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.6, emissive: new THREE.Color(color).multiplyScalar(0.3) });
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+
+                const eyeGeo = new THREE.SphereGeometry(size * 0.25, 8, 8);
+                const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: new THREE.Color(0xffffff) });
+                const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+                leftEye.position.set(-size * 0.3, size * 0.3, size * 0.5);
+                rightEye.position.set(size * 0.3, size * 0.3, size * 0.5);
+                group.add(leftEye);
+                group.add(rightEye);
+
+                const pupilGeo = new THREE.SphereGeometry(size * 0.12, 6, 6);
+                const pupilMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+                const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
+                const rightPupil = new THREE.Mesh(pupilGeo, pupilMat);
+                leftPupil.position.copy(leftEye.position);
+                rightPupil.position.copy(rightEye.position);
+                leftPupil.position.z += size * 0.15;
+                rightPupil.position.z += size * 0.15;
+                group.add(leftPupil);
+                group.add(rightPupil);
+
+                group.position.set(x, size * 0.8, z);
+                this.mesh = group;
+                this.body = body;
+                scene.add(group);
+                entityMeshes.push(this);
+            }
+
+            updatePosition() {
+                if (!this.alive) { this.mesh.visible = false; return; }
+                this.mesh.position.x = this.x;
+                this.mesh.position.z = this.z;
+                this.mesh.position.y = this.size * 0.8;
+                if (this.vx !== 0 || this.vz !== 0) {
+                    const angle = Math.atan2(this.vx, this.vz);
+                    this.mesh.rotation.y = angle;
+                }
+            }
+
+            remove() { scene.remove(this.mesh); }
+        }
+
+        // ========== ESTADO DO JOGO ==========
+        let playerEntity;
+        let survivors = [];
+        let animatronics = [];
+        let gameTime = 0;
+        const NIGHT_DURATION = 360;
+        const TIME_SPEED = 1.5;
+        let energy = 100;
+        let gameOver = false;
+        let gameWin = false;
+        let eKeyCooldown = 0;
+        let flashlightOn = true;
+
+        let yaw = 0;
+        let pitch = 0;
+        const moveSpeed = 4.5;
+        const mouseSensitivity = 0.002;
+        let isPointerLocked = false;
+
+        // Lanterna (apenas SpotLight, sem cone)
+        let flashlightLight;
+        let flashlightTimer = 0;
+
+        function createFlashlight() {
+            flashlightLight = new THREE.SpotLight(0xfff5e0, 2.5, 12, Math.PI / 4, 0.2, 1);
+            flashlightLight.castShadow = true;
+            flashlightLight.shadow.mapSize.width = 512;
+            flashlightLight.shadow.mapSize.height = 512;
+            // O target da SpotLight é automaticamente adicionado à cena
+            scene.add(flashlightLight);
+            scene.add(flashlightLight.target);
+        }
+
+        function updateFlashlight(dt) {
+            if (!playerEntity || !playerEntity.alive || !flashlightOn || energy <= 0) {
+                if (flashlightLight) flashlightLight.intensity = 0;
+                return;
+            }
+
+            flashlightTimer += dt;
+            const flicker = 1.0 + Math.sin(flashlightTimer * 30) * 0.03 + Math.sin(flashlightTimer * 50) * 0.05;
+            const intensity = Math.max(1.8, 2.5 * flicker);
+
+            // Direção exata da câmera
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+
+            flashlightLight.position.copy(camera.position);
+            flashlightLight.target.position.copy(camera.position.clone().add(dir.multiplyScalar(8)));
+            flashlightLight.intensity = intensity;
+        }
+
+        // ========== SPAWN DE ENTIDADES ==========
+        function spawnEntities() {
+            playerEntity = new Entity3D(3, 3, 0x00ff88, 0.8, 'player');
+            playerEntity.speed = moveSpeed;
+            playerEntity.size = 0.8;
+
+            const survivorColors = [0x4488ff, 0x44ccff, 0x88aaff, 0x66ddff];
+            const spawnPoints = [
+                { x: 5, z: 3 }, { x: 35, z: 3 }, { x: 5, z: 25 }, { x: 35, z: 25 }
+            ];
+            for (let i = 0; i < 3; i++) {
+                const s = new Entity3D(spawnPoints[i].x, spawnPoints[i].z, survivorColors[i], 0.65, 'cylinder');
+                s.speed = 1.8 + Math.random() * 0.8;
+                s.targetX = s.x;
+                s.targetZ = s.z;
+                s.changeTimer = 0;
+                survivors.push(s);
+            }
+
+            const animaColors = [0xff2222, 0xff4444, 0xcc0000, 0xff6666];
+            const animaSpawns = [
+                { x: 19, z: 13 }, { x: 7, z: 25 }, { x: 33, z: 25 }, { x: 21, z: 5 }
+            ];
+            for (let i = 0; i < 4; i++) {
+                const a = new Entity3D(animaSpawns[i].x, animaSpawns[i].z, animaColors[i], 0.9, 'anima');
+                a.speed = 1.5 + i * 0.4;
+                a.target = null;
+                a.patrolTimer = 0;
+                a.patrolX = a.x;
+                a.patrolZ = a.z;
+                a.lastKnownPos = null;
+                a.searchTimer = 0;
+                a.stuckTimer = 0;
+                animatronics.push(a);
+            }
+        }
+
+        // ========== VERIFICAÇÃO DE LINHA DE VISÃO ==========
+        function isTileBlockingVision(col, row) {
+            if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return true;
+            const tile = MAP_TEMPLATE[row][col];
+            if (tile === 1) return true;
+            if (tile === 2) {
+                const door = doorMeshes.find(d => d.col === col && d.row === row);
+                if (door && door.locked) return true;
+            }
+            return false;
+        }
+
+        function hasLineOfSight(x1, z1, x2, z2) {
+            const col1 = Math.floor(x1 / TILE_SIZE);
+            const row1 = Math.floor(z1 / TILE_SIZE);
+            const col2 = Math.floor(x2 / TILE_SIZE);
+            const row2 = Math.floor(z2 / TILE_SIZE);
+
+            let dx = Math.abs(col2 - col1);
+            let dy = Math.abs(row2 - row1);
+            let sx = col1 < col2 ? 1 : -1;
+            let sy = row1 < row2 ? 1 : -1;
+            let err = dx - dy;
+            let currentCol = col1;
+            let currentRow = row1;
+
+            while (true) {
+                if (isTileBlockingVision(currentCol, currentRow)) return false;
+                if (currentCol === col2 && currentRow === row2) break;
+                let e2 = 2 * err;
+                if (e2 > -dy) { err -= dy; currentCol += sx; }
+                if (e2 < dx) { err += dx; currentRow += sy; }
+            }
+            return true;
+        }
+
+        // ========== COLISÃO E MOVIMENTAÇÃO ==========
+        function isWalkable(worldX, worldZ, radius = 0.6) {
+            const col = Math.floor(worldX / TILE_SIZE);
+            const row = Math.floor(worldZ / TILE_SIZE);
+            if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
+            const tile = MAP_TEMPLATE[row][col];
+            if (tile === 1) return false;
+            if (tile === 2) {
+                const door = doorMeshes.find(d => d.col === col && d.row === row);
+                if (door && door.locked) return false;
+            }
+            return true;
+        }
+
+        function resolveCollision(entity, newX, newZ) {
+            const r = entity.size * 0.7;
+            const checks = [
+                { x: newX - r, z: newZ - r }, { x: newX + r, z: newZ - r },
+                { x: newX - r, z: newZ + r }, { x: newX + r, z: newZ + r },
+                { x: newX, z: newZ }
+            ];
+            for (const c of checks) {
+                if (!isWalkable(c.x, c.z, r)) return false;
+            }
+            return true;
+        }
+
+        function moveEntity3D(entity, dx, dz, dt) {
+            if (!entity.alive) return { moved: false };
+            const len = Math.sqrt(dx * dx + dz * dz);
+            if (len < 0.01) return { moved: false };
+            const normX = dx / len;
+            const normZ = dz / len;
+            const moveX = normX * entity.speed * dt;
+            const moveZ = normZ * entity.speed * dt;
+
+            const oldX = entity.x;
+            const oldZ = entity.z;
+            const newX = entity.x + moveX;
+            const newZ = entity.z + moveZ;
+
+            let movedX = false, movedZ = false;
+            if (resolveCollision(entity, newX, entity.z)) { entity.x = newX; movedX = true; }
+            if (resolveCollision(entity, entity.x, newZ)) { entity.z = newZ; movedZ = true; }
+
+            entity.x = Math.max(entity.size, Math.min(COLS * TILE_SIZE - entity.size, entity.x));
+            entity.z = Math.max(entity.size, Math.min(ROWS * TILE_SIZE - entity.size, entity.z));
+
+            const distMoved = Math.hypot(entity.x - oldX, entity.z - oldZ);
+            return { moved: distMoved > 0.05 };
+        }
+
+        // ========== ATUALIZAÇÃO DO JOGO ==========
+        function updateDoors(dt) {
+            let lockedCount = doorMeshes.filter(d => d.locked).length;
+            energy -= lockedCount * 1.2 * dt;
+            if (energy < 0) energy = 0;
+        }
+
+        function updateSurvivorAI(s, dt) {
+            if (!s.alive) return;
+            s.changeTimer -= dt;
+            if (s.changeTimer <= 0) {
+                s.targetX = 2 + Math.random() * (COLS * TILE_SIZE - 4);
+                s.targetZ = 2 + Math.random() * (ROWS * TILE_SIZE - 4);
+                s.changeTimer = 1.5 + Math.random() * 3;
+                let nearest = null;
+                let minDist = 8;
+                for (const a of animatronics) {
+                    if (!a.alive) continue;
+                    const dist = Math.hypot(s.x - a.x, s.z - a.z);
+                    if (dist < minDist) { minDist = dist; nearest = a; }
+                }
+                if (nearest) {
+                    const dx = s.x - nearest.x;
+                    const dz = s.z - nearest.z;
+                    const len = Math.hypot(dx, dz) || 1;
+                    s.targetX = s.x + (dx / len) * 10;
+                    s.targetZ = s.z + (dz / len) * 10;
+                }
+            }
+            const dx = s.targetX - s.x;
+            const dz = s.targetZ - s.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist > 0.5) {
+                s.vx = dx / dist;
+                s.vz = dz / dist;
+                moveEntity3D(s, s.vx, s.vz, dt);
+            }
+        }
+
+        function updateAnimatronicAI(a, dt) {
+            if (!a.alive) return;
+            const targets = [playerEntity, ...survivors].filter(t => t.alive);
+            if (targets.length === 0) {
+                a.patrolTimer -= dt;
+                if (a.patrolTimer <= 0) {
+                    a.patrolX = 2 + Math.random() * (COLS * TILE_SIZE - 4);
+                    a.patrolZ = 2 + Math.random() * (ROWS * TILE_SIZE - 4);
+                    a.patrolTimer = 3 + Math.random() * 4;
+                }
+                const dx = a.patrolX - a.x;
+                const dz = a.patrolZ - a.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist > 0.5) {
+                    a.vx = dx / dist;
+                    a.vz = dz / dist;
+                    moveEntity3D(a, a.vx, a.vz, dt);
+                }
+                return;
+            }
+
+            let bestTarget = null;
+            let bestDist = Infinity;
+            let hasLosToAny = false;
+            for (const t of targets) {
+                const dist = Math.hypot(a.x - t.x, a.z - t.z);
+                const los = hasLineOfSight(a.x, a.z, t.x, t.z);
+                if (los && dist < bestDist) {
+                    bestDist = dist;
+                    bestTarget = t;
+                    hasLosToAny = true;
+                }
+            }
+
+            if (hasLosToAny && bestTarget) {
+                const dx = bestTarget.x - a.x;
+                const dz = bestTarget.z - a.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist > 0.3) {
+                    a.vx = dx / dist;
+                    a.vz = dz / dist;
+                    const result = moveEntity3D(a, a.vx, a.vz, dt);
+                    if (!result.moved) {
+                        a.stuckTimer += dt;
+                        if (a.stuckTimer > 3) { a.lastKnownPos = null; a.stuckTimer = 0; }
+                    } else { a.stuckTimer = 0; }
+                }
+                a.lastKnownPos = { x: bestTarget.x, z: bestTarget.z };
+                a.searchTimer = 0;
+            } else {
+                if (a.lastKnownPos) {
+                    const dx = a.lastKnownPos.x - a.x;
+                    const dz = a.lastKnownPos.z - a.z;
+                    const dist = Math.hypot(dx, dz);
+                    if (dist > 0.8) {
+                        a.vx = dx / dist;
+                        a.vz = dz / dist;
+                        const result = moveEntity3D(a, a.vx, a.vz, dt);
+                        if (!result.moved) {
+                            a.stuckTimer += dt;
+                            if (a.stuckTimer > 3) { a.lastKnownPos = null; a.stuckTimer = 0; }
+                        } else { a.stuckTimer = 0; }
+                    } else {
+                        a.searchTimer += dt;
+                        if (a.searchTimer > 4) {
+                            a.lastKnownPos = null; a.searchTimer = 0; a.stuckTimer = 0;
+                        } else {
+                            a.patrolTimer -= dt;
+                            if (a.patrolTimer <= 0) {
+                                a.patrolX = a.x + (Math.random() - 0.5) * 6;
+                                a.patrolZ = a.z + (Math.random() - 0.5) * 6;
+                                a.patrolTimer = 1 + Math.random() * 2;
+                            }
+                            const dx2 = a.patrolX - a.x;
+                            const dz2 = a.patrolZ - a.z;
+                            const dist2 = Math.hypot(dx2, dz2);
+                            if (dist2 > 0.3) {
+                                a.vx = dx2 / dist2;
+                                a.vz = dz2 / dist2;
+                                moveEntity3D(a, a.vx, a.vz, dt);
+                            }
+                        }
+                    }
+                } else {
+                    a.patrolTimer -= dt;
+                    if (a.patrolTimer <= 0) {
+                        a.patrolX = 2 + Math.random() * (COLS * TILE_SIZE - 4);
+                        a.patrolZ = 2 + Math.random() * (ROWS * TILE_SIZE - 4);
+                        a.patrolTimer = 3 + Math.random() * 4;
+                    }
+                    const dx = a.patrolX - a.x;
+                    const dz = a.patrolZ - a.z;
+                    const dist = Math.hypot(dx, dz);
+                    if (dist > 0.5) {
+                        a.vx = dx / dist;
+                        a.vz = dz / dist;
+                        moveEntity3D(a, a.vx, a.vz, dt);
+                    }
+                }
+            }
+        }
+
+        function checkCollisions3D() {
+            for (const a of animatronics) {
+                if (!a.alive) continue;
+                if (playerEntity.alive && Math.hypot(a.x - playerEntity.x, a.z - playerEntity.z) < a.size + playerEntity.size - 0.2) {
+                    playerEntity.alive = false;
+                    gameOver = true;
+                }
+                for (const s of survivors) {
+                    if (!s.alive) continue;
+                    if (Math.hypot(a.x - s.x, a.z - s.z) < a.size + s.size - 0.2) {
+                        s.alive = false;
+                    }
+                }
+            }
+        }
+
+        function interactWithDoor() {
+            if (eKeyCooldown > 0 || !playerEntity || !playerEntity.alive) return;
+            const pCol = Math.floor(playerEntity.x / TILE_SIZE);
+            const pRow = Math.floor(playerEntity.z / TILE_SIZE);
+            const nearby = [
+                { c: pCol, r: pRow }, { c: pCol + 1, r: pRow }, { c: pCol - 1, r: pRow },
+                { c: pCol, r: pRow + 1 }, { c: pCol, r: pRow - 1 }
+            ];
+            for (const pos of nearby) {
+                if (pos.c >= 0 && pos.c < COLS && pos.r >= 0 && pos.r < ROWS && MAP_TEMPLATE[pos.r][pos.c] === 2) {
+                    const door = doorMeshes.find(d => d.col === pos.c && d.row === pos.r);
+                    if (door) {
+                        door.locked = !door.locked;
+                        eKeyCooldown = 0.5;
+                        updateDoorVisuals();
+                        break;
+                    }
+                }
+            }
+        }
+
+        function resetGame() {
+            if (playerEntity) playerEntity.remove();
+            survivors.forEach(s => s.remove());
+            animatronics.forEach(a => a.remove());
+            survivors = [];
+            animatronics = [];
+            playerEntity = null;
+            scene.remove(wallGroup);
+            createMap();
+            updateDoorVisuals();
+            spawnEntities();
+            gameTime = 0;
+            energy = 100;
+            gameOver = false;
+            gameWin = false;
+            eKeyCooldown = 0;
+            flashlightOn = true;
+            overlay.style.display = 'none';
+            camera.position.set(3, 1.6, 3);
+            yaw = 0;
+            pitch = 0;
+        }
+
+        // ========== CONTROLES DE PRIMEIRA PESSOA ==========
+        function onPointerLockChange() {
+            isPointerLocked = document.pointerLockElement === renderer.domElement;
+        }
+
+        document.addEventListener('pointerlockchange', onPointerLockChange);
+        renderer.domElement.addEventListener('click', () => {
+            // Apenas travar ponteiro (clique esquerdo). A lanterna é ativada com botão direito.
+            if (!isPointerLocked && !gameOver && !gameWin) {
+                renderer.domElement.requestPointerLock();
+            }
+        });
+
+        // Alternar lanterna com botão direito
+        renderer.domElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // impede menu de contexto
+            if (playerEntity && playerEntity.alive && !gameOver && !gameWin) {
+                flashlightOn = !flashlightOn;
+            }
+        });
+
+        // Também suporta mousedown (caso o contexto não dispare)
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            if (e.button === 2) { // botão direito
+                if (playerEntity && playerEntity.alive && !gameOver && !gameWin) {
+                    flashlightOn = !flashlightOn;
+                }
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isPointerLocked || gameOver || gameWin) return;
+            yaw -= e.movementX * mouseSensitivity;
+            pitch -= e.movementY * mouseSensitivity;
+            pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, pitch));
+        });
+
+        const keys = {};
+        window.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key.toLowerCase() === 'e') interactWithDoor();
+            if (e.key.toLowerCase() === 'r' && (gameOver || gameWin)) resetGame();
+            if (e.key === 'Escape') document.exitPointerLock();
+        });
+        window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+        // ========== LOOP PRINCIPAL ==========
+        let lastTime = performance.now();
+        function animate(timestamp) {
+            requestAnimationFrame(animate);
+            let dt = (timestamp - lastTime) / 1000;
+            if (dt > 0.1) dt = 0.1;
+            if (dt <= 0) dt = 0.016;
+            lastTime = timestamp;
+
+            if (!gameOver && !gameWin) {
+                gameTime += TIME_SPEED * dt;
+                if (gameTime >= NIGHT_DURATION) {
+                    gameTime = NIGHT_DURATION;
+                    gameWin = true;
+                }
+
+                if (flashlightOn && playerEntity && playerEntity.alive) energy -= 0.6 * dt;
+                updateDoors(dt);
+                if (energy <= 0) {
+                    energy = 0;
+                    flashlightOn = false;
+                    doorMeshes.forEach(d => d.locked = false);
+                    updateDoorVisuals();
+                }
+                if (eKeyCooldown > 0) eKeyCooldown -= dt;
+
+                if (playerEntity && playerEntity.alive && isPointerLocked) {
+                    const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+                    const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+
+                    let dx = 0, dz = 0;
+                    if (keys['w'] || keys['arrowup']) { dx += forward.x; dz += forward.z; }
+                    if (keys['s'] || keys['arrowdown']) { dx -= forward.x; dz -= forward.z; }
+                    if (keys['a'] || keys['arrowleft']) { dx -= right.x; dz -= right.z; }
+                    if (keys['d'] || keys['arrowright']) { dx += right.x; dz += right.z; }
+
+                    if (dx !== 0 || dz !== 0) {
+                        const len = Math.sqrt(dx * dx + dz * dz);
+                        dx /= len;
+                        dz /= len;
+                        moveEntity3D(playerEntity, dx, dz, dt);
+                    }
+                }
+
+                if (playerEntity && playerEntity.alive) {
+                    camera.position.x = playerEntity.x;
+                    camera.position.z = playerEntity.z;
+                    camera.position.y = 1.6;
+                    camera.rotation.order = 'YXZ';
+                    camera.rotation.y = yaw;
+                    camera.rotation.x = pitch;
+                }
+
+                survivors.forEach(s => updateSurvivorAI(s, dt));
+                animatronics.forEach(a => updateAnimatronicAI(a, dt));
+                checkCollisions3D();
+
+                if (playerEntity && !playerEntity.alive) gameOver = true;
+            }
+
+            if (playerEntity) playerEntity.updatePosition();
+            survivors.forEach(s => s.updatePosition());
+            animatronics.forEach(a => a.updatePosition());
+
+            updateFlashlight(dt);
+
+            const hours = Math.floor(gameTime / 60);
+            const minutes = Math.floor(gameTime % 60);
+            timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+            energyFill.style.width = Math.max(0, energy) + '%';
+            const aliveCount = (playerEntity?.alive ? 1 : 0) + survivors.filter(s => s.alive).length;
+            survivorsCountEl.textContent = aliveCount;
+            animaCountEl.textContent = animatronics.filter(a => a.alive).length;
+
+            if (gameWin) {
+                overlay.style.display = 'block';
+                overlay.textContent = '🌅 AMANHECEU!\nVOCÊ SOBREVIVEU!';
+                overlay.style.color = '#ffcc00';
+                document.exitPointerLock();
+            } else if (gameOver) {
+                overlay.style.display = 'block';
+                overlay.textContent = '💀 GAME OVER';
+                overlay.style.color = '#ff0000';
+                document.exitPointerLock();
+            } else {
+                overlay.style.display = 'none';
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        createMap();
+        createFlashlight();
+        spawnEntities();
+        updateDoorVisuals();
+        animate(performance.now());
+
+        window.addEventListener('resize', () => {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        console.log('🎃 FNAF: Doom 3D - Lanterna no botão direito e sem cone!');
+    </script>
+</body>
+
+</html>
