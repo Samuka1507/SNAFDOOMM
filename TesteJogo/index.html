@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FNAF: Doom 3D - Lanterna no Botão Direito</title>
+    <title>FNAF: Doom 3D - Pizzaria Completa</title>
     <style>
         :root {
             --bg: #000;
@@ -185,6 +185,20 @@
             z-index: 12;
             background: radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
         }
+
+        #recharge-indicator {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffaa00;
+            font-size: 1.2em;
+            text-shadow: 0 0 15px #ffaa00;
+            pointer-events: none;
+            z-index: 15;
+            display: none;
+            letter-spacing: 3px;
+        }
     </style>
 </head>
 
@@ -192,6 +206,7 @@
     <div id="game-container">
         <div id="vignette"></div>
         <div id="overlay"></div>
+        <div id="recharge-indicator">⚡ RECARREGANDO...</div>
         <div id="hud">
             <span><span class="label">⏰ HORA:</span><span class="value" id="time-display">00:00</span></span>
             <span><span class="label">⚡ ENERGIA:</span>
@@ -200,12 +215,12 @@
                 </div>
             </span>
             <span><span class="label">🟢 SOBREVIVENTES:</span><span class="value" id="survivors-count">4</span></span>
-            <span><span class="label">👹 ANIMATRÔNICOS:</span><span class="value" id="anima-count">4</span></span>
+            <span><span class="label">👹 ATIVOS:</span><span class="value" id="anima-count">0</span></span>
         </div>
         <div id="instructions">
-            🎮 <b>WASD</b> - Mover &nbsp;|&nbsp; 🖱️ <b>MOUSE</b> - Olhar &nbsp;|&nbsp; 🖱️ <b>BOTÃO DIREITO</b> -
-            Lanterna &nbsp;|&nbsp; 🔒 <b>E</b> - Trancar porta &nbsp;|&nbsp; <b>R</b> - Reiniciar &nbsp;|&nbsp;
-            <b>ESC</b> - Soltar mouse
+            🎮 <b>WASD</b> - Mover &nbsp;|&nbsp; 🖱️ <b>MOUSE</b> - Olhar &nbsp;|&nbsp; 🖱️ <b>BOTÃO DIR.</b> - Lanterna
+            &nbsp;|&nbsp; 🔒 <b>E</b> - Trancar porta &nbsp;|&nbsp; ⚡ <b>F</b> - Gerador &nbsp;|&nbsp; <b>R</b> -
+            Reiniciar &nbsp;|&nbsp; <b>ESC</b> - Soltar mouse
         </div>
         <div id="crosshair"></div>
     </div>
@@ -225,6 +240,7 @@
         // ========== CONFIGURAÇÃO INICIAL ==========
         const container = document.getElementById('game-container');
         const overlay = document.getElementById('overlay');
+        const rechargeIndicator = document.getElementById('recharge-indicator');
         const timeDisplay = document.getElementById('time-display');
         const energyFill = document.getElementById('energy-fill');
         const survivorsCountEl = document.getElementById('survivors-count');
@@ -235,7 +251,7 @@
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x020208);
-        scene.fog = new THREE.FogExp2(0x020208, 0.025);
+        scene.fog = new THREE.FogExp2(0x020208, 0.015);
 
         const camera = new THREE.PerspectiveCamera(70, WIDTH / HEIGHT, 0.3, 100);
         camera.position.set(3, 1.6, 3);
@@ -247,46 +263,56 @@
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         container.appendChild(renderer.domElement);
 
-        const ambientLight = new THREE.AmbientLight(0x112244, 0.15);
+        const ambientLight = new THREE.AmbientLight(0x112244, 0.12);
         scene.add(ambientLight);
-        const dirLight = new THREE.DirectionalLight(0x223344, 0.05);
+        const dirLight = new THREE.DirectionalLight(0x223344, 0.04);
         dirLight.position.set(10, 20, 10);
         scene.add(dirLight);
 
-        // ========== CONSTANTES DO MAPA (estilo FNAF Doom 2) ==========
+        // ========== CONSTANTES DO MAPA (Pizzaria FNAF) ==========
         const TILE_SIZE = 2;
-        const COLS = 20;
-        const ROWS = 15;
+        const COLS = 24;
+        const ROWS = 18;
+        // 0 = chão, 1 = parede, 2 = porta, 3 = gerador, 4 = mesa (bloqueio), 5 = palco (caminhável)
         const MAP_TEMPLATE = [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-            [1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 5, 5, 5, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 2, 0, 0, 0, 0, 5, 5, 5, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 2, 0, 4, 0, 4, 0, 2, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 2, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 3, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         ];
 
         // ========== CRIAÇÃO DO LABIRINTO ==========
         const wallGroup = new THREE.Group();
         const doorMeshes = [];
+        const generatorMeshes = [];
         const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.8, metalness: 0.2 });
         const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x0a0a15, roughness: 0.9 });
         const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x3a5a3a, roughness: 0.6, metalness: 0.3 });
         const doorLockedMaterial = new THREE.MeshStandardMaterial({ color: 0x8b0000, roughness: 0.4, metalness: 0.5, emissive: new THREE.Color(0x200000) });
+        const generatorMaterial = new THREE.MeshStandardMaterial({ color: 0xff8800, roughness: 0.5, metalness: 0.7, emissive: new THREE.Color(0x331100) });
+        const tableMaterial = new THREE.MeshStandardMaterial({ color: 0x5a4a3a, roughness: 0.7, metalness: 0.2 });
+        const stageMaterial = new THREE.MeshStandardMaterial({ color: 0x3a2a4a, roughness: 0.6, metalness: 0.4 });
 
         function createMap() {
             while (wallGroup.children.length > 0) wallGroup.remove(wallGroup.children[0]);
             doorMeshes.length = 0;
+            generatorMeshes.length = 0;
 
+            // Piso
             const floorGeo = new THREE.PlaneGeometry(COLS * TILE_SIZE, ROWS * TILE_SIZE);
             const floorMesh = new THREE.Mesh(floorGeo, floorMaterial);
             floorMesh.rotation.x = -Math.PI / 2;
@@ -296,6 +322,10 @@
 
             const wallGeo = new THREE.BoxGeometry(TILE_SIZE, 3, TILE_SIZE);
             const doorGeo = new THREE.BoxGeometry(TILE_SIZE * 0.8, 3, TILE_SIZE * 0.8);
+            const tableGeo = new THREE.BoxGeometry(TILE_SIZE * 0.8, 0.8, TILE_SIZE * 0.8);
+            const stageGeo = new THREE.BoxGeometry(TILE_SIZE, 0.3, TILE_SIZE);
+            const genBodyGeo = new THREE.CylinderGeometry(0.6, 0.6, 1.2, 8);
+            const genTopGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.2, 8);
 
             for (let row = 0; row < ROWS; row++) {
                 for (let col = 0; col < COLS; col++) {
@@ -316,6 +346,31 @@
                         doorMesh.receiveShadow = true;
                         wallGroup.add(doorMesh);
                         doorMeshes.push({ mesh: doorMesh, col, row, locked: false });
+                    } else if (tile === 3) {
+                        const genGroup = new THREE.Group();
+                        const body = new THREE.Mesh(genBodyGeo, generatorMaterial);
+                        body.position.y = 0.6;
+                        body.castShadow = true;
+                        body.receiveShadow = true;
+                        genGroup.add(body);
+                        const top = new THREE.Mesh(genTopGeo, generatorMaterial);
+                        top.position.y = 1.2;
+                        top.castShadow = true;
+                        genGroup.add(top);
+                        genGroup.position.set(x, 0, z);
+                        wallGroup.add(genGroup);
+                        generatorMeshes.push({ mesh: genGroup, col, row });
+                    } else if (tile === 4) {
+                        const table = new THREE.Mesh(tableGeo, tableMaterial);
+                        table.position.set(x, 0.4, z);
+                        table.castShadow = true;
+                        table.receiveShadow = true;
+                        wallGroup.add(table);
+                    } else if (tile === 5) {
+                        const stage = new THREE.Mesh(stageGeo, stageMaterial);
+                        stage.position.set(x, 0.15, z);
+                        stage.receiveShadow = true;
+                        wallGroup.add(stage);
                     }
                 }
             }
@@ -329,7 +384,6 @@
         }
 
         // ========== ENTIDADES 3D ==========
-        const entityMeshes = [];
         class Entity3D {
             constructor(x, z, color, size = 0.7, shape = 'cylinder') {
                 this.x = x;
@@ -339,6 +393,7 @@
                 this.vx = 0;
                 this.vz = 0;
                 this.speed = 2;
+                this.activationTime = -1; // -1 significa ativo desde o início (sobreviventes)
 
                 const group = new THREE.Group();
                 let bodyGeo;
@@ -376,7 +431,6 @@
                 this.mesh = group;
                 this.body = body;
                 scene.add(group);
-                entityMeshes.push(this);
             }
 
             updatePosition() {
@@ -398,8 +452,8 @@
         let survivors = [];
         let animatronics = [];
         let gameTime = 0;
-        const NIGHT_DURATION = 360;
-        const TIME_SPEED = 1.5;
+        const NIGHT_DURATION = 360; // 6h em minutos
+        const TIME_SPEED = 60 / 85; // 1h jogo = 85s reais
         let energy = 100;
         let gameOver = false;
         let gameWin = false;
@@ -412,16 +466,52 @@
         const mouseSensitivity = 0.002;
         let isPointerLocked = false;
 
-        // Lanterna (apenas SpotLight, sem cone)
+        // Lanterna
         let flashlightLight;
         let flashlightTimer = 0;
+
+        // Gerador
+        let isRecharging = false;
+        let currentGenerator = null;
+        const RECHARGE_RATE = 15;
+        const RECHARGE_ATTRACTION_RADIUS = 12;
+
+        // Áudio
+        let audioContext;
+        let generatorOscillator;
+        let generatorGain;
+        let soundStarted = false;
+
+        function initAudio() {
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        function startGeneratorSound() {
+            if (!audioContext) return;
+            if (soundStarted) return;
+            generatorOscillator = audioContext.createOscillator();
+            generatorGain = audioContext.createGain();
+            generatorOscillator.type = 'sawtooth';
+            generatorOscillator.frequency.value = 60;
+            generatorGain.gain.value = 0.15;
+            generatorOscillator.connect(generatorGain);
+            generatorGain.connect(audioContext.destination);
+            generatorOscillator.start();
+            soundStarted = true;
+        }
+        function stopGeneratorSound() {
+            if (generatorOscillator && soundStarted) {
+                generatorOscillator.stop();
+                generatorOscillator.disconnect();
+                generatorGain.disconnect();
+                soundStarted = false;
+            }
+        }
 
         function createFlashlight() {
             flashlightLight = new THREE.SpotLight(0xfff5e0, 2.5, 12, Math.PI / 4, 0.2, 1);
             flashlightLight.castShadow = true;
             flashlightLight.shadow.mapSize.width = 512;
             flashlightLight.shadow.mapSize.height = 512;
-            // O target da SpotLight é automaticamente adicionado à cena
             scene.add(flashlightLight);
             scene.add(flashlightLight.target);
         }
@@ -431,15 +521,12 @@
                 if (flashlightLight) flashlightLight.intensity = 0;
                 return;
             }
-
             flashlightTimer += dt;
             const flicker = 1.0 + Math.sin(flashlightTimer * 30) * 0.03 + Math.sin(flashlightTimer * 50) * 0.05;
-            const intensity = Math.max(1.8, 2.5 * flicker);
-
-            // Direção exata da câmera
+            let intensity = Math.max(1.8, 2.5 * flicker);
+            if (isRecharging) intensity *= (Math.sin(flashlightTimer * 20) > 0 ? 1.0 : 0.3);
             const dir = new THREE.Vector3();
             camera.getWorldDirection(dir);
-
             flashlightLight.position.copy(camera.position);
             flashlightLight.target.position.copy(camera.position.clone().add(dir.multiplyScalar(8)));
             flashlightLight.intensity = intensity;
@@ -447,13 +534,15 @@
 
         // ========== SPAWN DE ENTIDADES ==========
         function spawnEntities() {
+            // Jogador
             playerEntity = new Entity3D(3, 3, 0x00ff88, 0.8, 'player');
             playerEntity.speed = moveSpeed;
             playerEntity.size = 0.8;
 
+            // Sobreviventes
             const survivorColors = [0x4488ff, 0x44ccff, 0x88aaff, 0x66ddff];
             const spawnPoints = [
-                { x: 5, z: 3 }, { x: 35, z: 3 }, { x: 5, z: 25 }, { x: 35, z: 25 }
+                { x: 5, z: 3 }, { x: 43, z: 3 }, { x: 5, z: 33 }, { x: 43, z: 33 }
             ];
             for (let i = 0; i < 3; i++) {
                 const s = new Entity3D(spawnPoints[i].x, spawnPoints[i].z, survivorColors[i], 0.65, 'cylinder');
@@ -464,13 +553,24 @@
                 survivors.push(s);
             }
 
+            // Animatrônicos com horários de ativação
             const animaColors = [0xff2222, 0xff4444, 0xcc0000, 0xff6666];
+            const animaNames = ['Freddy', 'Bonnie', 'Chica', 'Foxy'];
+            // Posições iniciais no palco (tiles 5)
+            const palcoCenterX = 11 * TILE_SIZE + TILE_SIZE / 2; // col 10? Vamos colocar no tile (10,1) e (11,1)
+            const palcoZ = 1 * TILE_SIZE + TILE_SIZE / 2;
             const animaSpawns = [
-                { x: 19, z: 13 }, { x: 7, z: 25 }, { x: 33, z: 25 }, { x: 21, z: 5 }
+                { x: 19, z: 3 }, // Freddy (col 9)
+                { x: 21, z: 3 }, // Bonnie (col 10)
+                { x: 23, z: 3 }, // Chica (col 11)
+                { x: 25, z: 5 }  // Foxy
             ];
+            const activationTimes = [60, 90, 120, 150]; // em minutos de jogo
+
             for (let i = 0; i < 4; i++) {
                 const a = new Entity3D(animaSpawns[i].x, animaSpawns[i].z, animaColors[i], 0.9, 'anima');
                 a.speed = 1.5 + i * 0.4;
+                a.name = animaNames[i];
                 a.target = null;
                 a.patrolTimer = 0;
                 a.patrolX = a.x;
@@ -478,6 +578,7 @@
                 a.lastKnownPos = null;
                 a.searchTimer = 0;
                 a.stuckTimer = 0;
+                a.activationTime = activationTimes[i];
                 animatronics.push(a);
             }
         }
@@ -486,7 +587,7 @@
         function isTileBlockingVision(col, row) {
             if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return true;
             const tile = MAP_TEMPLATE[row][col];
-            if (tile === 1) return true;
+            if (tile === 1 || tile === 4) return true; // parede ou mesa bloqueia
             if (tile === 2) {
                 const door = doorMeshes.find(d => d.col === col && d.row === row);
                 if (door && door.locked) return true;
@@ -524,7 +625,7 @@
             const row = Math.floor(worldZ / TILE_SIZE);
             if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
             const tile = MAP_TEMPLATE[row][col];
-            if (tile === 1) return false;
+            if (tile === 1 || tile === 4) return false; // parede ou mesa
             if (tile === 2) {
                 const door = doorMeshes.find(d => d.col === col && d.row === row);
                 if (door && door.locked) return false;
@@ -570,6 +671,62 @@
             return { moved: distMoved > 0.05 };
         }
 
+        // ========== GERENCIAMENTO DO GERADOR ==========
+        function findNearestGenerator() {
+            if (!playerEntity || !playerEntity.alive) return null;
+            const px = playerEntity.x;
+            const pz = playerEntity.z;
+            let best = null;
+            let bestDist = 2.5;
+            for (const gen of generatorMeshes) {
+                const gx = gen.col * TILE_SIZE + TILE_SIZE / 2;
+                const gz = gen.row * TILE_SIZE + TILE_SIZE / 2;
+                const dist = Math.hypot(px - gx, pz - gz);
+                if (dist < bestDist) { bestDist = dist; best = gen; }
+            }
+            return best;
+        }
+
+        function startRecharge(gen) {
+            if (isRecharging) return;
+            if (energy >= 100) return;
+            isRecharging = true;
+            currentGenerator = gen;
+            rechargeIndicator.style.display = 'block';
+            initAudio();
+            startGeneratorSound();
+        }
+
+        function stopRecharge() {
+            if (!isRecharging) return;
+            isRecharging = false;
+            currentGenerator = null;
+            rechargeIndicator.style.display = 'none';
+            stopGeneratorSound();
+        }
+
+        function updateRecharge(dt) {
+            if (!isRecharging || !playerEntity || !playerEntity.alive) {
+                if (isRecharging) stopRecharge();
+                return;
+            }
+            const gen = findNearestGenerator();
+            if (gen !== currentGenerator) { stopRecharge(); return; }
+            energy = Math.min(100, energy + RECHARGE_RATE * dt);
+            if (energy >= 100) { energy = 100; stopRecharge(); return; }
+            if (Math.random() < dt * 1.5) {
+                for (const a of animatronics) {
+                    if (!a.alive || gameTime < a.activationTime) continue;
+                    const dist = Math.hypot(a.x - gen.col * TILE_SIZE - TILE_SIZE / 2, a.z - gen.row * TILE_SIZE - TILE_SIZE / 2);
+                    if (dist < RECHARGE_ATTRACTION_RADIUS) {
+                        a.lastKnownPos = { x: gen.col * TILE_SIZE + TILE_SIZE / 2, z: gen.row * TILE_SIZE + TILE_SIZE / 2 };
+                        a.searchTimer = 0;
+                        a.stuckTimer = 0;
+                    }
+                }
+            }
+        }
+
         // ========== ATUALIZAÇÃO DO JOGO ==========
         function updateDoors(dt) {
             let lockedCount = doorMeshes.filter(d => d.locked).length;
@@ -587,7 +744,7 @@
                 let nearest = null;
                 let minDist = 8;
                 for (const a of animatronics) {
-                    if (!a.alive) continue;
+                    if (!a.alive || gameTime < a.activationTime) continue;
                     const dist = Math.hypot(s.x - a.x, s.z - a.z);
                     if (dist < minDist) { minDist = dist; nearest = a; }
                 }
@@ -611,6 +768,12 @@
 
         function updateAnimatronicAI(a, dt) {
             if (!a.alive) return;
+            // Só ativa após o horário
+            if (gameTime < a.activationTime) {
+                a.vx = 0; a.vz = 0;
+                return;
+            }
+
             const targets = [playerEntity, ...survivors].filter(t => t.alive);
             if (targets.length === 0) {
                 a.patrolTimer -= dt;
@@ -632,18 +795,15 @@
 
             let bestTarget = null;
             let bestDist = Infinity;
-            let hasLosToAny = false;
             for (const t of targets) {
                 const dist = Math.hypot(a.x - t.x, a.z - t.z);
-                const los = hasLineOfSight(a.x, a.z, t.x, t.z);
-                if (los && dist < bestDist) {
+                if (hasLineOfSight(a.x, a.z, t.x, t.z) && dist < bestDist) {
                     bestDist = dist;
                     bestTarget = t;
-                    hasLosToAny = true;
                 }
             }
 
-            if (hasLosToAny && bestTarget) {
+            if (bestTarget) {
                 const dx = bestTarget.x - a.x;
                 const dz = bestTarget.z - a.z;
                 const dist = Math.hypot(dx, dz);
@@ -713,7 +873,7 @@
 
         function checkCollisions3D() {
             for (const a of animatronics) {
-                if (!a.alive) continue;
+                if (!a.alive || gameTime < a.activationTime) continue; // inativo não ataca
                 if (playerEntity.alive && Math.hypot(a.x - playerEntity.x, a.z - playerEntity.z) < a.size + playerEntity.size - 0.2) {
                     playerEntity.alive = false;
                     gameOver = true;
@@ -748,7 +908,20 @@
             }
         }
 
+        function handleGeneratorInteract() {
+            if (!playerEntity || !playerEntity.alive || gameOver || gameWin) return;
+            const gen = findNearestGenerator();
+            if (gen) {
+                if (!isRecharging) {
+                    if (energy < 100) startRecharge(gen);
+                } else {
+                    stopRecharge();
+                }
+            }
+        }
+
         function resetGame() {
+            stopRecharge();
             if (playerEntity) playerEntity.remove();
             survivors.forEach(s => s.remove());
             animatronics.forEach(a => a.remove());
@@ -766,41 +939,29 @@
             eKeyCooldown = 0;
             flashlightOn = true;
             overlay.style.display = 'none';
+            rechargeIndicator.style.display = 'none';
             camera.position.set(3, 1.6, 3);
             yaw = 0;
             pitch = 0;
+            isRecharging = false;
+            currentGenerator = null;
         }
 
-        // ========== CONTROLES DE PRIMEIRA PESSOA ==========
+        // ========== CONTROLES ==========
         function onPointerLockChange() {
             isPointerLocked = document.pointerLockElement === renderer.domElement;
         }
-
         document.addEventListener('pointerlockchange', onPointerLockChange);
         renderer.domElement.addEventListener('click', () => {
-            // Apenas travar ponteiro (clique esquerdo). A lanterna é ativada com botão direito.
-            if (!isPointerLocked && !gameOver && !gameWin) {
-                renderer.domElement.requestPointerLock();
-            }
+            if (!isPointerLocked && !gameOver && !gameWin) renderer.domElement.requestPointerLock();
         });
-
-        // Alternar lanterna com botão direito
         renderer.domElement.addEventListener('contextmenu', (e) => {
-            e.preventDefault(); // impede menu de contexto
-            if (playerEntity && playerEntity.alive && !gameOver && !gameWin) {
-                flashlightOn = !flashlightOn;
-            }
+            e.preventDefault();
+            if (playerEntity && playerEntity.alive && !gameOver && !gameWin) flashlightOn = !flashlightOn;
         });
-
-        // Também suporta mousedown (caso o contexto não dispare)
         renderer.domElement.addEventListener('mousedown', (e) => {
-            if (e.button === 2) { // botão direito
-                if (playerEntity && playerEntity.alive && !gameOver && !gameWin) {
-                    flashlightOn = !flashlightOn;
-                }
-            }
+            if (e.button === 2 && playerEntity && playerEntity.alive && !gameOver && !gameWin) flashlightOn = !flashlightOn;
         });
-
         document.addEventListener('mousemove', (e) => {
             if (!isPointerLocked || gameOver || gameWin) return;
             yaw -= e.movementX * mouseSensitivity;
@@ -812,6 +973,7 @@
         window.addEventListener('keydown', (e) => {
             keys[e.key.toLowerCase()] = true;
             if (e.key.toLowerCase() === 'e') interactWithDoor();
+            if (e.key.toLowerCase() === 'f') handleGeneratorInteract();
             if (e.key.toLowerCase() === 'r' && (gameOver || gameWin)) resetGame();
             if (e.key === 'Escape') document.exitPointerLock();
         });
@@ -828,10 +990,7 @@
 
             if (!gameOver && !gameWin) {
                 gameTime += TIME_SPEED * dt;
-                if (gameTime >= NIGHT_DURATION) {
-                    gameTime = NIGHT_DURATION;
-                    gameWin = true;
-                }
+                if (gameTime >= NIGHT_DURATION) { gameTime = NIGHT_DURATION; gameWin = true; }
 
                 if (flashlightOn && playerEntity && playerEntity.alive) energy -= 0.6 * dt;
                 updateDoors(dt);
@@ -840,23 +999,22 @@
                     flashlightOn = false;
                     doorMeshes.forEach(d => d.locked = false);
                     updateDoorVisuals();
+                    if (isRecharging) stopRecharge();
                 }
                 if (eKeyCooldown > 0) eKeyCooldown -= dt;
+                updateRecharge(dt);
 
                 if (playerEntity && playerEntity.alive && isPointerLocked) {
                     const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
                     const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-
                     let dx = 0, dz = 0;
                     if (keys['w'] || keys['arrowup']) { dx += forward.x; dz += forward.z; }
                     if (keys['s'] || keys['arrowdown']) { dx -= forward.x; dz -= forward.z; }
                     if (keys['a'] || keys['arrowleft']) { dx -= right.x; dz -= right.z; }
                     if (keys['d'] || keys['arrowright']) { dx += right.x; dz += right.z; }
-
                     if (dx !== 0 || dz !== 0) {
                         const len = Math.sqrt(dx * dx + dz * dz);
-                        dx /= len;
-                        dz /= len;
+                        dx /= len; dz /= len;
                         moveEntity3D(playerEntity, dx, dz, dt);
                     }
                 }
@@ -874,13 +1032,12 @@
                 animatronics.forEach(a => updateAnimatronicAI(a, dt));
                 checkCollisions3D();
 
-                if (playerEntity && !playerEntity.alive) gameOver = true;
+                if (playerEntity && !playerEntity.alive) { gameOver = true; if (isRecharging) stopRecharge(); }
             }
 
             if (playerEntity) playerEntity.updatePosition();
             survivors.forEach(s => s.updatePosition());
             animatronics.forEach(a => a.updatePosition());
-
             updateFlashlight(dt);
 
             const hours = Math.floor(gameTime / 60);
@@ -889,7 +1046,8 @@
             energyFill.style.width = Math.max(0, energy) + '%';
             const aliveCount = (playerEntity?.alive ? 1 : 0) + survivors.filter(s => s.alive).length;
             survivorsCountEl.textContent = aliveCount;
-            animaCountEl.textContent = animatronics.filter(a => a.alive).length;
+            const activeAnima = animatronics.filter(a => a.alive && gameTime >= a.activationTime).length;
+            animaCountEl.textContent = activeAnima;
 
             if (gameWin) {
                 overlay.style.display = 'block';
@@ -922,7 +1080,7 @@
             renderer.setSize(w, h);
         });
 
-        console.log('🎃 FNAF: Doom 3D - Lanterna no botão direito e sem cone!');
+        console.log('🎃 FNAF: Doom 3D - Pizzaria com ativação progressiva!');
     </script>
 </body>
 
